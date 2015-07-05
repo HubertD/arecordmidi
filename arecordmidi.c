@@ -85,6 +85,7 @@ static int metronome_channel = METRONOME_CHANNEL;
 static int ts_num = 4; /* time signature: numerator */
 static int ts_div = 4; /* time signature: denominator */
 static int ts_dd = 2; /* time signature: denominator as a power of two */
+static snd_seq_tick_time_t t_start = 0;
 
 
 /* prints an error message to stderr, and dies */
@@ -402,12 +403,12 @@ static void var_value(struct smf_track *track, int v)
 /* record the delta time from the last event */
 static void delta_time(struct smf_track *track, const snd_seq_event_t *ev)
 {
-	printf("tick: %d\n", ev->time.tick);
-	int diff = ev->time.tick - track->last_tick;
+	snd_seq_tick_time_t tick = ev->time.tick - t_start;
+	int diff = tick - track->last_tick;
 	if (diff < 0)
 		diff = 0;
 	var_value(track, diff);
-	track->last_tick = ev->time.tick;
+	track->last_tick = tick;
 }
 
 /* record a status byte (or not if we can use running status) */
@@ -443,6 +444,9 @@ static void record_event(const snd_seq_event_t *ev)
 	/* ignore events without proper timestamps */
 	if (ev->queue != queue || !snd_seq_ev_is_tick(ev))
 		return;
+
+	if (t_start==0)
+		t_start = ev->time.tick;
 
 	/* determine which track to record to */
 	i = ev->dest.port;
