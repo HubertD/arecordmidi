@@ -5,7 +5,7 @@ do
 	tmpfile=$(tempfile --suffix=.mid)
 	./arecordmidi -p 24 -T 10000 $tmpfile
 
-	if [ -n $tmpfile ]
+	if [ -f $tmpfile ]
 	then
 		outfile=$(date +arecordmidi-%Y-%m-%d-%H:%M:%S.mid)
 		mv $tmpfile ~/midi/$outfile
