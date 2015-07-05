@@ -29,7 +29,6 @@
 #include <getopt.h>
 #include <sys/poll.h>
 #include <alsa/asoundlib.h>
-#include "aconfig.h"
 #include "version.h"
 
 #define BUFFER_SIZE 4088
