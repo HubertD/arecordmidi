@@ -69,6 +69,7 @@ static int smpte_timing = 0;
 static int beats = 120;
 static int frames;
 static int ticks = 0;
+static int timeout = 0;
 static FILE *file;
 static int channel_split;
 static int num_tracks;
@@ -401,6 +402,7 @@ static void var_value(struct smf_track *track, int v)
 /* record the delta time from the last event */
 static void delta_time(struct smf_track *track, const snd_seq_event_t *ev)
 {
+	printf("tick: %d\n", ev->time.tick);
 	int diff = ev->time.tick - track->last_tick;
 	if (diff < 0)
 		diff = 0;
@@ -689,7 +691,8 @@ static void help(const char *argv0)
 		"  -t,--ticks=ticks           resolution in ticks per beat or frame\n"
 		"  -s,--split-channels        create a track for each channel\n"
 		"  -m,--metronome=client:port play a metronome signal\n"
-		"  -i,--timesig=nn:dd         time signature\n",
+		"  -i,--timesig=nn:dd         time signature\n"
+		"  -T,--timeout=n             stop recording n milliseconds after the last event\n",
 		argv0);
 }
 
@@ -705,7 +708,7 @@ static void sighandler(int sig)
 
 int main(int argc, char *argv[])
 {
-	static const char short_options[] = "hVlp:b:f:t:sdm:i:";
+	static const char short_options[] = "hVlp:b:f:t:T:sdm:i:";
 	static const struct option long_options[] = {
 		{"help", 0, NULL, 'h'},
 		{"version", 0, NULL, 'V'},
@@ -718,6 +721,7 @@ int main(int argc, char *argv[])
 		{"dump", 0, NULL, 'd'},
 		{"metronome", 1, NULL, 'm'},
 		{"timesig", 1, NULL, 'i'},
+		{"timeout", 1, NULL, 'T'},
 		{ }
 	};
 
@@ -726,6 +730,7 @@ int main(int argc, char *argv[])
 	struct pollfd *pfds;
 	int npfds;
 	int c, err;
+	int no_events = 0;
 
 	init_seq();
 
@@ -773,6 +778,11 @@ int main(int argc, char *argv[])
 			break;
 		case 'i':
 			time_signature(optarg);
+			break;
+		case 'T':
+			timeout = atoi(optarg);
+			if (timeout < 0)
+				fatal("Timout must be 0(=disabled) or a positive value in milliseconds.");
 			break;
 		default:
 			help(argv[0]);
@@ -856,15 +866,22 @@ int main(int argc, char *argv[])
 	pfds = alloca(sizeof(*pfds) * npfds);
 	for (;;) {
 		snd_seq_poll_descriptors(seq, pfds, npfds, POLLIN);
-		if (poll(pfds, npfds, -1) < 0)
+		err = poll(pfds, npfds, (timeout==0) ? -1 : timeout);
+		if (err == 0) { // timeout occured
+			if (no_events>0)
+				break;
+		} else if (err < 0) {
 			break;
+		}
 		do {
 			snd_seq_event_t *event;
 			err = snd_seq_event_input(seq, &event);
 			if (err < 0)
 				break;
-			if (event)
+			if (event) {
 				record_event(event);
+				no_events++;
+			}
 		} while (err > 0);
 		if (stop)
 			break;
